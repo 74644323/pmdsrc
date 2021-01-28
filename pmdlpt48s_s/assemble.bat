@@ -1,0 +1,14 @@
+optasm pmd;
+optasm pmdb2;
+optasm pmd86;
+optasm pmdppz;
+optasm pmdppze;
+optasm pmdva;
+optasm pmdva1;
+optlink pmd,pmd.com;
+optlink pmdb2,pmdb2.com;
+optlink pmd86,pmd86.com;
+optlink pmdppz,pmdppz.com;
+optlink pmdppze,pmdppze.com;
+optlink pmdva,pmdva.com;
+optlink pmdva1,pmdva1.com;
