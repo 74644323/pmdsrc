@@ -63,11 +63,11 @@ ifndef	resmes
 resmes	equ	"PMD ver.",ver
 endif
 
-;if	va+board2
-;fmvd_init	=	0
-;else
-;fmvd_init	=	16	;ÇXÇWÇÕÇWÇWÇÊÇËÇ‡ÇeÇlâπåπÇè¨Ç≥Ç≠
-;endif
+if	va+board2
+fmvd_init	=	0
+else
+fmvd_init	=	16	;ÇXÇWÇÕÇWÇWÇÊÇËÇ‡ÇeÇlâπåπÇè¨Ç≥Ç≠
+endif
 
 ;==============================================================================
 ;	INT 60H édól
@@ -9743,18 +9743,30 @@ check_lpt:
 	mov	al,0FFh
 	out	dx,al	;write 0xFF to LPT
 	mov	dx,142h
-	in	al,dx
-	and	al,0F0h
-	or	al,09h
-	out	dx,al	;set A0=0;A1=0;WR=0;RD=1
+	mov	al,0Dh
+	out	dx,al	;set A0=0;A1=0;WR=1;RD=1	output
+	mov	cx,100
+	loop	$	;delay 10 cycles
+	mov	al,09h
+	out	dx,al	;set A0=0;A1=0;WR=0;RD=1	output
 	mov	cx,10
 	loop	$	;delay 10 cycles
 	or	al,04h
 	out	dx,al	;set WR=1
-
-	mov	al,-1
-	mov	cx,100
-	loop	$
+	;mov	al,-1
+	mov	dx,142h
+	in	al,dx
+	and	al,0F0h
+	or	al,2Fh
+	out	dx,al	;set A0=0;A1=0;WR=1;RD=0	input
+	mov	dx,140h
+	in	al,dx	;dummy read
+	in	al,dx	;FFh:NC,80h:OK
+	mov	bl,al
+	mov	al,0Dh
+	out	dx,al	;set A0=0;A1=0;WR=1;RD=1	output
+	add	bl,1	;check if bl=FFh
+	jz	pc_error
 
 	sti
 	mov	dx,188h
