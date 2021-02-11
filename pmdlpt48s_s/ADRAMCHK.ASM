@@ -22,9 +22,10 @@ adpcm_ram_check:
 	xor	ax,ax
 rep	stosw
 	mov	si,offset check_data
-	call	pcmstore		;clear pcm(low speed)
+	;call	pcmstore		;clear pcm(low speed)
 	pop	ax
-	jc	found_ymf288
+	;jc	found_ymf288
+	jmp	found_ymf288		;disable ADPCM
 
 	cmp	al,2
 	jz	not_check_middle
@@ -98,7 +99,7 @@ pcmstore:
 	mov	dx,04ffh
 	call	opnset46
 	inc	dh
-	call	opnset46
+	call	opnset46		;write 05FFh OK
 
 	mov	cx,32
 

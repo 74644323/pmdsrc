@@ -4,6 +4,7 @@
 
 board2	equ	1
 adpcm	equ	1
+;ademu	equ	1
 lpt		equ	1
 _myname	equ	"PMDLPT COM"
 resmes	equ	"PMDLPT ver.",ver
@@ -258,7 +259,7 @@ _rwait		macro			;リズム連続出力用wait
 
 rdychk		macro			;Address out時用	break:ax
 local		loop
-		push	ax
+
 		push	bx
 		push	dx	
 		;in	al,dx		;無駄読み
@@ -280,9 +281,10 @@ loop:
 		;test	al,al
 		test	bl,bl	;bl=bl&bl;
 		js	loop		;loop if YM2608 busy=1
+		mov	al,bl		;al=OPN status(for TIMERA,B check)
 		pop	dx
 		pop	bx
-		pop	ax
+
 		endm
 
 _ppz		macro
@@ -889,19 +891,58 @@ ppz_pan_init_loop:
 	loop	ppz_pan_init_loop
  endif
 else
-	mov	dx,[fm2_port1]
+	;mov	dx,[fm2_port1]
+	mov	dx,142h
+	in al,dx
+	and al,0D0h	;set output
+	or al,05h	;set A0=0;A1=1;WR=1;RD=1;
+	out dx,al
+
 	pushf
 	cli
 	rdychk
+
 	mov	al,10h
+	;out	dx,al
+	mov	dx,140h
+	out	dx,al	;send address(al) to 140H
+	mov	dx,142h
+	in	al,dx
+	and	al,0F9h	;set WR=0;RD=1
 	out	dx,al
-	mov	dx,[fm2_port2]
+	mov	cx,10
+	loop	$	;delay 10 cycles
+	or	al,04h	;set WR=1;
+	out	dx,al
+
+	;mov	dx,[fm2_port2]
 	_wait
 	mov	al,80h
+	;out	dx,al
+	mov	dx,140h
+	out	dx,al	;send data to 140H
+	mov	dx,142h
+	in	al,dx
+	and	al,0F0h	;set A0=1;A1=1;WR=0;RD=1
+	out	dx,al
+	mov	cx,10
+	loop	$	;delay 10 cycles
+	or	al,04h	;set WR=1;
 	out	dx,al
 	_wait
 	mov	al,18h
+	;out	dx,al
+	mov	dx,140h
+	out	dx,al	;send data to 140H
+	mov	dx,142h
+	in	al,dx
+	and	al,0F0h	;set A0=1;A1=1;WR=0;RD=1
 	out	dx,al
+	mov	cx,10
+	loop	$	;delay 10 cycles
+	or	al,04h	;set WR=1;
+	out	dx,al
+
 	popf
 endif
 	ret
@@ -6461,13 +6502,46 @@ endif
 ;		cliしてから来ること
 ;==============================================================================
 get07:	push	dx
-	mov	dx,[fm1_port1]
+		push	bx
+	;mov	dx,[fm1_port1]
+	mov	dx,142h
+	in	al,dx
+	and	al,0D0h		;set output
+	or	al,0Dh		;set A0=0;A1=0;WR=1;RD=1
+	out	dx,al	
 	rdychk
+	mov	dx,140h
 	mov	al,7
 	out	dx,al
-	_waitP			;PSG Read Wait
-	mov	dx,[fm1_port2]
+	mov	dx,142h
 	in	al,dx
+	and	al,0F9h	;set WR=0;RD=1
+	out	dx,al
+	mov	cx,10
+	loop	$	;delay 10 cycles
+	or	al,04h	;set WR=1;
+	out	dx,al
+
+	_waitP			;PSG Read Wait
+	;mov	dx,[fm1_port2]
+	mov	dx,142h
+	in	al,dx
+	or	al,2Eh		;set input     A1=0;WR=1;RD=0;
+	and	al,0FEh		;set A0=1;
+	out	dx,al
+
+	mov	dx,140h
+	in	al,dx
+	in	al,dx
+	mov	bl,al
+
+	mov	dx,142h
+	in	al,dx
+	and	al,0DDh		;set output RD=1;
+	out	dx,al
+	mov	al,bl
+
+	pop	bx
 	pop	dx
 	ret
 
@@ -7768,9 +7842,13 @@ endif
 ;------------------------------------------------------------------------------
 ;	TimerA/Bをcheck
 ;------------------------------------------------------------------------------
-	mov	dx,[fm1_port1]
+	;mov	dx,[fm1_port1]
+	mov	dx,142h
+	in	al,dx
+	or	al,09h		;set A0=0;A1=0
+	out	dx,al	
 	rdychk
-	and	al,3
+	and	al,3		;read OPN status
 	jz	opnint_fin	;Timer割り込みが来ていない
 	call	FM_Timer_main
 	jmp	INT_check	;最初からやりなおし
@@ -7791,7 +7869,11 @@ int5_fook:
 ;------------------------------------------------------------------------------
 ;	Check Timer
 ;------------------------------------------------------------------------------
-	mov	dx,[fm1_port1]
+	;mov	dx,[fm1_port1]
+	mov	dx,142h
+	in	al,dx
+	or	al,09h		;set A0=0;A1=0
+	out	dx,al	
 	rdychk
 	and	al,3
 	jnz	INT_check	;やりなおし
@@ -7876,16 +7958,61 @@ FM_Timer_main:
 ;	Timer Reset
 ;	同時にＦＭ割り込み Timer AorB どちらが来たかを読み取る
 ;------------------------------------------------------------------------------
-	mov	dx,[fm1_port1]
+	;mov	dx,[fm1_port1]
+	mov	dx,142h
+	in	al,dx
+	and	al,0D0h	;set output
+	or	al,0dh	;set A0=0;A1=0;WR=1;RD=1;
+	out	dx,al
 	rdychk
+	mov	dx,140h
 	mov	al,27h
+	out	dx,al
+	mov	dx,142h
+	in	al,dx
+	and	al,0F9h	;set WR=0;RD=1
+	out	dx,al
+	mov	cx,10
+	loop	$	;delay 10 cycles
+	or	al,04h	;set WR=1;
 	out	dx,al
 	_wait
 	mov	ah,[ch3mode]	;ah = 27hに出力する値
+
+	mov	dx,142h
+	in	al,dx
+	or	al,22h	;set input RD=0;
+	out	dx,al
+	mov	dx,140h
+	in	al,dx
 	in	al,dx	;rdychk	;al = status
 	xchg	ah,al		;ah = status / al=27hに出力する値
-	mov	dx,[fm1_port2]
+	push	ax
+
+	mov	dx,142h
+	in	al,dx
+	and	al,0DDh	;set output RD=1
+	out	dx,al
+
+	;mov	dx,[fm1_port2]
+	mov	dx,142h
+	in	al,dx
+	and	al,0D0h	;set output
+	or	al,0Ch	;set A0=1;A1=0;WR=1;RD=1;
+	out	dx,al
+
+	mov	dx,140h
+	pop	ax
 	out	dx,al		;Timer Reset
+
+	mov	dx,142h
+	in	al,dx
+	and	al,0F9h	;set WR=0;RD=1
+	out	dx,al
+	mov	cx,10h
+	loop	$	;delay 10 cycles
+	or	al,04h	;set WR=1;
+	out	dx,al
 
 	and	ah,3		;ah = TimerA/B flag
 
@@ -8915,7 +9042,8 @@ if	va
 	call	opnset44
 else
 	mov	cx,4
-	mov	dx,088h
+	mov	dx,188h
+	jmp	opninit_exec
 
 opninit_loop:
 	push	cx
@@ -8931,20 +9059,20 @@ opninit_loop2:
 	jmp	opninit_next	;音源無し
 
 opninit_exec:
-	pushf
-	cli
-	rdychk
-	mov	al,0eh
-	out	dx,al
-	mov	cx,256
-	loop	$
-	add	dx,2
-	in	al,dx
-	popf
-	sub	dx,2
-	and	al,0c0h
-	cmp	al,[opn_0eh]	;int番号を比較
-	jnz	opninit_next	;非一致なら初期化しない
+;	pushf
+;	cli
+;	rdychk
+;	mov	al,0eh
+;	out	dx,al
+;	mov	cx,256
+;	loop	$
+;	add	dx,2
+;	in	al,dx
+;	popf
+;	sub	dx,2
+;	and	al,0c0h
+;	cmp	al,[opn_0eh]	;int番号を比較
+;	jnz	opninit_next	;非一致なら初期化しない
 
 	mov	ax,2900h
 	call	opnset_fmc
@@ -8956,11 +9084,13 @@ opninit_exec:
 	call	opnset_fmc
 	mov	ax,273fh
 	call	opnset_fmc
+	jmp	opninit_pass
 
 opninit_next:
 	pop	cx
 	inc	dh
 	loop	opninit_loop
+opninit_pass:
 endif
 
 ;==============================================================================
@@ -8970,7 +9100,7 @@ endif
 	xor	ax,ax
 	mov	es,ax
 	mov	bx,[vector]
-	les	bx,es:[bx]
+	les	bx,es:[bx]		;save 0000:0058
 	mov	[int5ofs],bx
 	mov	[int5seg],es
 
@@ -9086,10 +9216,13 @@ endif
 if	board2*adpcm
 	mov	dx,2983h
 	call	opnset44		;2608 on
+	print_mes	mes_trace_init
+
  if	ademu
 	mov	[pcm_gs_flag],1		;ADPCMは使用しない
  else
 	call	adpcm_ram_check		;in ADRAMCHK.ASM
+	print_mes	mes_trace_adpcm_ramchk
  endif
 else
 	mov	[pcm_gs_flag],1		;ADPCMは使用しない
@@ -9164,7 +9297,7 @@ int_init:
 	mov	dx,142H
 	in	al,dx
 	and	al,0D0H	;set output
-	or	al,0cH	;set A0=1;A1=0;WR=1;RD=1;
+	or	al,0DH	;set A0=0;A1=0;WR=1;RD=1;
 	out	dx,al
 	
 	pushf
@@ -9172,29 +9305,54 @@ int_init:
 	rdychk
 	mov	al,0eh
 	;out	dx,al
+	mov	dx,140H
+	out	dx,al
+	mov	dx,142H
+	in	al,dx
+	and	al,0f9H	;set WR=0;RD=1
+	out	dx,al
+	mov	cx,10
+	loop	$	;delay 10 cycles
+	or	al,04H	;set WR=1;
+	out	dx,al
 	
 	
 	_wait			;PSG Read Wait
-	mov	dx,[fm1_port2]
-	in	al,dx
+	;mov	dx,[fm1_port2]
+	mov	dx,142H
+	in	al,dx	
+	and	al,0F0H	;set input
+	or	al,2EH	;set A0=1;A1=0;WR=1;RD=0;
+	out	dx,al
+	mov	cx,10
+	loop	$	;delay 10 cycles
+	mov	dx,140H
+	in	al,dx	;dummy read
+	in	al,dx	;read  18Ah 0Eh (SSG IO PORTA)
+	mov	cl,al	;al->cl
+	mov	dx,142H
+	in	al,dx	
+	and	al,0DDH	;set output RD=1;
+	out	dx,al
 	popf
+	mov	al,cl	;cl->al
 	and	al,0c0h
 ife	va
-	mov	[opn_0eh],al
+	mov	[opn_0eh],al	;取OPN芯片0Eh的高2位,IRST0,IRST1保存到[opn_0eh]?量
 endif
 	rol	al,1
-	rol	al,1
+	rol	al,1	;al<<2(al=al*4)
 	add	al,al
-	add	al,al
-	xor	ah,ah
-	mov	bx,offset vector_table
+	add	al,al	
+	xor	ah,ah	;?或ah(清空ah?)
+	mov	bx,offset vector_table	;取vector_table?量地址到bx
 	add	bx,ax
-	mov	al,[bx]
-	mov	[int_num],al
-	mov	al,[bx+1]
-	mov	[int_level],al
-	mov	ax,[bx+2]
-	mov	[vector],ax
+	;mov	al,"9"
+	;mov	[int_num],al			;int号
+	mov	al,14
+	mov	[int_level],al			;IRQ?先?
+	mov	ax,0058h
+	mov	[vector],ax				;中断向量地址
 
 	cmp	[message_flag],0
 	jz	pps_chk
@@ -9206,7 +9364,7 @@ endif
 	add	bx,bx
 	add	bx,offset ongen_sel
 	mov	dx,[bx]
-	print_dx
+	print_dx	;大概是?示字符串:使用的INT和PORT
 
 ife	ademu
  if	board2*pcm
@@ -9284,12 +9442,13 @@ ppzchk_next:
 ppzchk_end:
 endif
 ;------------------------------------------------------------------------------
-;	MASK/EOIの出力先の設定
+;	MASK/EOIの出力先の設定  ?定8259A的中断掩蔽位和EOI
 ;------------------------------------------------------------------------------
 mask_eoi_set:
-	mov	al,[int_level]
+	mov	al,[int_level]	;中断号,取?IRQ0-IRQ15(00h-0Fh),0-7=master,8-15=slave
 	test	al,8		;Slave?
-	jnz	i6s_slave
+	;jnz	i6s_slave
+	jmp	i6s_slave		;use IRQ14(slave 8259)
 
 ;	Masterの場合
 	mov	dx,ms_msk
@@ -9312,21 +9471,23 @@ mask_eoi_set:
 
 ;	Slaveの場合
 i6s_slave:
-	and	al,7		;AL=INTLevel
+	and	al,7		;AL=INTLevel	(INT5->IRQ12?)
 	mov	dx,sl_msk
-	mov	[mask_adr],dx	;MaskはSlaveを
+	mov	[mask_adr],dx	;MaskはSlaveを	中断?接在slave 8259上(IRQ14)
 	mov	cl,al
-	inc	cl
-	xor	ah,ah
-	stc
-	rcl	ah,cl
-	mov	[mask_data],ah	;Maskするデータ
-	not	ah
-	mov	[mask_data2],ah	;Mask解除するデータ
+	inc	cl				;cl++
+	xor	ah,ah			;clear ah
+	stc					;?位?志置1
+	;rcl	ah,cl		;??位循?左移
+	mov	ah,01000000b	;IRQ14(LPT nACK中断)
+	mov	[mask_data],ah	;Maskするデータ		用or?置音源中断掩蔽
+	not	ah				;按位取反
+	mov	[mask_data2],ah	;Mask解除するデータ	用and解除音源中断掩蔽
 	mov	dx,sl_cmd
-	mov	[eoi_adr],dx	;EOIはSlaveにSendする
-	or	al,60h
-	mov	[eoi_data],al	;特殊EOI + 割り込みベクトル が入る
+	mov	[eoi_adr],dx	;EOIはSlaveにSendする	slave 8259的EOI地址
+	;or	al,60h			;特殊EOI=01100000b(60h)+?先?（0000b-0111b）
+	mov	al,66h			;特殊EOI (IRQ14)
+	mov	[eoi_data],al	;特殊EOI + 割り込みベクトル が入る	?送到8259的特殊EOI数据
 
 i6s_intexit:
 	mov	ax,cs
@@ -9428,18 +9589,61 @@ ife	va
 ;			dx	port
 ;==============================================================================
 opnset_fmc:
+	push	ax
+	mov	dx,142h
+	in	al,dx
+	and	al,0D0h	;set output
+	or	al,0dh	;set A0=0;A1=0;WR=1;RD=1;
+	out	dx,al
+	pop	ax
+
 	pushf
 	cli
 	mov	cx,256
 	loop	$
-	xchg	ah,al
+	xchg	ah,al	;交?ah,al
+	;out	dx,al		
+	mov	dx,140h
+	out	dx,al
+	mov	dx,142h
+	push	ax
+	in	al,dx
+	and	al,0F9h	;set WR=0;RD=1
 	out	dx,al
 	mov	cx,256
-	loop	$
-	add	dx,2
-	xchg	ah,al
+	loop	$	;delay 10 cycles
+	or	al,04h	;set WR=1;
 	out	dx,al
-	sub	dx,2
+
+
+;	mov	cx,256
+;	loop	$
+	
+	;add	dx,2
+	mov	dx,142h
+	in	al,dx
+	and	al,0D0h	;set output
+	or	al,0Ch	;set A0=1;A1=0;WR=1;RD=1;
+	out	dx,al
+	pop	ax
+
+	xchg	ah,al
+	;out	dx,al
+	mov	dx,140h
+	out	dx,al
+	push	ax
+	mov	dx,142h
+	in	al,dx
+	and	al,0F9h	;set WR=0;RD=1
+	out	dx,al
+	mov	cx,10h
+	loop	$	;delay 10 cycles
+	or	al,04h	;set WR=1;
+	out	dx,al
+	pop	ax
+	
+	;sub	dx,2
+	mov	dx,188h
 	popf
 	ret
 endif
@@ -9763,8 +9967,9 @@ check_lpt:
 	in	al,dx	;dummy read
 	in	al,dx	;FFh:NC,80h:OK
 	mov	bl,al
+	mov	dx,142h	;bug fixed
 	mov	al,0Dh
-	out	dx,al	;set A0=0;A1=0;WR=1;RD=1	output
+	out	dx,al	;set A0=0;A1=0;WR=1;RD=1	output	IRQoff
 	add	bl,1	;check if bl=FFh
 	jz	pc_error
 
@@ -10195,6 +10400,15 @@ intset2:
 	and	al,bl
 	out	dx,al	;該当IRのマスクを解除
 
+	push	ax
+	push	dx
+	mov	dx,142h
+	in	al,dx
+	or	al,10h
+	out	dx,al	;ackIntEn=1
+	pop	dx
+	pop	ax
+	
 	not	bl	;BL=対象bitのみ１になる
 	and	ah,bl	;対象bitのみ 0か1 他は0になる
 	mov	cs:[maskpush],ah	;0なら使用中 0以外なら使用してなかった
@@ -10858,10 +11072,15 @@ if	board2
  if	pcm+ppz
 mes_not_board	db	"YM2608+PCM が見つかりません．",13,10,eof
  else
-mes_not_board	db	"YM2608+ADPCM が見つかりません．",13,10,eof
+mes_not_board	db	"OPN3LPT が見つかりません．",13,10,eof
  endif
 else
 mes_not_board	db	"ＦＭ音源ボードが装着されていません．",13,10,eof
+endif
+
+if	lpt
+mes_trace_init	db	"initing...",13,10,eof
+mes_trace_adpcm_ramchk	db	"ADPCM RAM CHECK PASS",13,10,eof
 endif
 
 mes_cut		db	"常駐解除しました．",13,10,eof
